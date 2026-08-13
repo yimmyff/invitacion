@@ -24,13 +24,17 @@
   }
 
   *{margin:0;padding:0;box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
+  html{scroll-behavior:smooth; overflow-x:hidden; width:100%;}
 
   body{
     background:var(--c1);
     color:var(--ink);
     font-family:'EB Garamond', serif;
     overflow-x:hidden;
+    width:100%;
+    max-width:100vw;
+    word-wrap:break-word;
+    overflow-wrap:break-word;
     -webkit-font-smoothing:antialiased;
   }
   body.locked{ overflow:hidden; height:100vh; }
@@ -546,7 +550,7 @@
     max-width:460px; width:100%;
   }
   .song-form input{
-    flex:1 1 240px;
+    flex:1 1 240px; min-width:0; max-width:100%;
     font-family:'EB Garamond', serif; font-size:1.05rem;
     padding:0.85rem 1.1rem; border:1px solid var(--line); border-radius:30px;
     background:rgba(255,255,255,0.65); color:var(--ink);
@@ -567,10 +571,11 @@
   .song-list li{
     padding:0.8rem 0; border-bottom:1px solid var(--line);
     font-family:'EB Garamond', serif; font-size:1.05rem; color:var(--ink);
-    display:flex; align-items:center; gap:0.7rem;
+    display:flex; align-items:baseline; gap:0.7rem;
+    word-break:break-word; overflow-wrap:anywhere;
     opacity:0; transform:translateY(8px); animation:albumIn 0.4s ease forwards;
   }
-  .song-list li::before{ content:"♪"; color:var(--gold); font-size:1rem; }
+  .song-list li::before{ content:"♪"; color:var(--gold); font-size:1rem; flex:0 0 auto; }
 
   .closing-section{
     min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
