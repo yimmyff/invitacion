@@ -191,13 +191,11 @@
   .hero-content{ position:relative; z-index:3; padding:0 1.5rem; }
 
   .uni-badge{
-    width:84px; height:84px; margin:0 auto 1.3rem;
-    border:1px solid var(--gold); border-radius:50%;
+    width:96px; height:96px; margin:0 auto 1.3rem;
     display:flex; align-items:center; justify-content:center;
-    background:rgba(255,255,255,0.55);
-    box-shadow:0 10px 24px rgba(28,58,92,0.12);
+    filter:drop-shadow(0 8px 16px rgba(28,58,92,0.18));
   }
-  .uni-badge svg{ width:40px; height:40px; }
+  .uni-badge img{ width:100%; height:100%; object-fit:contain; }
 
   .uni-lines{ margin-bottom:2.4rem; }
   .uni-main{
@@ -610,22 +608,18 @@
 <body class="locked">
 
 <!--
-  Fondo con imágenes que van cambiando solas, como un video lento.
-  Son fotos de Picsum (banco de imágenes gratuito para maquetas/placeholders).
-  Para poner tus propias imágenes, solo reemplaza cada URL de "background-image:url('...')"
-  por la tuya (puede ser un enlace o, si subes el archivo junto a una carpeta "img/",
-  algo como url('img/foto1.jpg')).
+  Fondo con tus propias fotos de la Universidad CESMAG, cambiando solas y en orden aleatorio.
 -->
 <div class="bg-slideshow" id="bgSlideshow">
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1015/1600/1000')"></div>
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1018/1600/1000')"></div>
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1043/1600/1000')"></div>
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1074/1600/1000')"></div>
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1069/1600/1000')"></div>
-  <div class="bg-slide" style="background-image:url('https://picsum.photos/id/1039/1600/1000')"></div>
+  <div class="bg-slide" style="background-image:url('https://raw.githubusercontent.com/yimmyff/invitacion/main/fondo.webp')"></div>
+  <div class="bg-slide" style="background-image:url('https://raw.githubusercontent.com/yimmyff/invitacion/main/fondo1.jpg')"></div>
+  <div class="bg-slide" style="background-image:url('https://raw.githubusercontent.com/yimmyff/invitacion/main/fondo2.jpg')"></div>
+  <div class="bg-slide" style="background-image:url('https://raw.githubusercontent.com/yimmyff/invitacion/main/fondo3.webp')"></div>
 </div>
 <div class="bg-veil"></div>
 <div class="grain"></div>
+
+<audio id="bgAudio" src="https://raw.githubusercontent.com/yimmyff/invitacion/main/audio.mp3" loop preload="auto"></audio>
 
 <button class="music-btn" id="musicToggle" aria-label="Reproducir música">
   <svg class="icon-muted" viewBox="0 0 24 24" fill="none" stroke="#D4AF57" stroke-width="1.6" xmlns="http://www.w3.org/2000/svg">
@@ -697,12 +691,7 @@
     <div class="hero-content">
       <div class="hero-inner">
         <div class="uni-badge">
-          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M32 14 L58 24 L32 34 L6 24 Z" fill="#B8912E"/>
-            <path d="M18 28 V40 C18 45 25 49 32 49 C39 49 46 45 46 40 V28" stroke="#B8912E" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-            <line x1="52" y1="24" x2="52" y2="40" stroke="#B8912E" stroke-width="2.4" stroke-linecap="round"/>
-            <circle cx="52" cy="42" r="3" fill="#B8912E"/>
-          </svg>
+          <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/escudo.png" alt="Escudo Universidad CESMAG">
         </div>
 
         <p class="uni-lines">
@@ -970,7 +959,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 <script>
   gsap.registerPlugin(ScrollTrigger);
 
@@ -1000,7 +988,12 @@
 
     setInterval(() => {
       const current = bgSlides[bgIndex];
-      const nextIndex = (bgIndex + 1) % bgSlides.length;
+      let nextIndex = bgIndex;
+      if(bgSlides.length > 1){
+        while(nextIndex === bgIndex){
+          nextIndex = Math.floor(Math.random() * bgSlides.length);
+        }
+      }
       const next = bgSlides[nextIndex];
 
       gsap.set(next, { scale:1 });
@@ -1019,84 +1012,16 @@
 
   // ---- música ambiental original, generada en el navegador (sin derechos de autor) ----
   let musicReady = false, musicPlaying = false;
-  let padSynth, pluckSynth, trumpetSynth;
-
-  function buildMusic(){
-    const reverb = new Tone.Reverb({ decay: 6.5, wet: 0.42 }).toDestination();
-
-    // cuerdas cálidas de fondo (como violines de mariachi)
-    padSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "sine" },
-      envelope: { attack: 1.6, decay: 0.6, sustain: 0.65, release: 3.2 }
-    }).connect(reverb);
-    padSynth.volume.value = -17;
-
-    // bajo/guitarra suave marcando el pulso tipo bolero
-    pluckSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.02, decay: 0.7, sustain: 0.05, release: 1.2 }
-    }).connect(reverb);
-    pluckSynth.volume.value = -20;
-
-    // voz principal tipo trompeta, con vibrato, al estilo balada mexicana
-    const vibrato = new Tone.Vibrato(5.5, 0.18).connect(reverb);
-    trumpetSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "sawtooth" },
-      envelope: { attack: 0.06, decay: 0.3, sustain: 0.55, release: 1.4 },
-      portamento: 0.04
-    }).connect(vibrato);
-    trumpetSynth.volume.value = -15;
-
-    // progresión cálida y romántica (i - VI - III - VII en Re menor)
-    const padChords = [["D3","F3","A3"], ["Bb2","D3","F3"], ["F2","A2","C3"], ["C3","E3","G3"]];
-    let pi = 0;
-    new Tone.Loop(time => {
-      padSynth.triggerAttackRelease(padChords[pi % padChords.length], "2m", time);
-      pi++;
-    }, "2m").start(0);
-
-    // bajo marcando la raíz de cada acorde, con aire de bolero lento
-    const bassNotes = ["D2","Bb1","F1","C2"];
-    let bi = 0;
-    new Tone.Loop(time => {
-      pluckSynth.triggerAttackRelease(bassNotes[bi % bassNotes.length], "2n", time);
-      pluckSynth.triggerAttackRelease(bassNotes[bi % bassNotes.length], "4n", time + Tone.Time("1m").toSeconds());
-      bi++;
-    }, "2m").start(0);
-
-    // melodía original de "trompeta", frase-respuesta romántica (propia, no copiada)
-    const trumpetMelody = [
-      { n:"D4", d:"4n" }, { n:"F4", d:"8n" }, { n:"A4", d:"4n" }, { n:"G4", d:"4n." },
-      { n:"F4", d:"4n" }, { n:"D4", d:"4n" }, { n:"E4", d:"2n" },
-      { n:"A3", d:"4n" }, { n:"C4", d:"8n" }, { n:"D4", d:"4n" }, { n:"C4", d:"4n." },
-      { n:"Bb3", d:"4n" }, { n:"A3", d:"4n" }, { n:"F3", d:"2n" }
-    ];
-    let ti = 0, tOffset = 0;
-    function scheduleTrumpetPhrase(){
-      trumpetMelody.forEach(note => {
-        const dur = Tone.Time(note.d).toSeconds();
-        Tone.Transport.scheduleOnce(time => {
-          trumpetSynth.triggerAttackRelease(note.n, note.d, time);
-        }, "+" + tOffset);
-        tOffset += dur;
-      });
-    }
-    // primera frase entra tras un compás de introducción de cuerdas
-    Tone.Transport.scheduleOnce(() => { tOffset = 0; scheduleTrumpetPhrase(); }, "0:4:0");
-    new Tone.Loop(() => { tOffset = 0; scheduleTrumpetPhrase(); }, "4m").start("4m");
-
-    Tone.Transport.bpm.value = 64;
-  }
+  const bgAudio = document.getElementById('bgAudio');
+  let musicPlaying = false;
 
   async function startMusic(){
-    await Tone.start();
-    if(!musicReady){ buildMusic(); musicReady = true; }
-    Tone.Transport.start();
+    try{ await bgAudio.play(); } catch(err){ console.error('No se pudo reproducir el audio:', err); }
     musicPlaying = true;
     document.getElementById('musicToggle').classList.add('playing');
   }
   function pauseMusic(){
-    Tone.Transport.pause();
+    bgAudio.pause();
     musicPlaying = false;
     document.getElementById('musicToggle').classList.remove('playing');
   }
