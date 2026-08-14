@@ -1131,6 +1131,24 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+<!-- Firebase: guarda fotos y canciones en la nube para que se vean en cualquier dispositivo -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyC4vuJ3qMbVKmsbUSoh-QAaOlPy_sJw9vo",
+    authDomain: "invitacion-nataliaa.firebaseapp.com",
+    projectId: "invitacion-nataliaa",
+    storageBucket: "invitacion-nataliaa.firebasestorage.app",
+    messagingSenderId: "420989941085",
+    appId: "1:420989941085:web:b155f6168b933e24ae24b4",
+    measurementId: "G-2Y96CX8B1G"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+</script>
+
 <script>
   gsap.registerPlugin(ScrollTrigger);
 
@@ -1285,32 +1303,24 @@
     setInterval(tick, 1000);
   })();
 
-  // ---- álbum de fotos: se guarda aunque se cierre la página ----
-  // Usa el almacenamiento compartido del artifact (window.storage) cuando está disponible,
-  // para que TODOS los que abran la invitación vean las mismas fotos.
-  // Si se abre como archivo suelto fuera de Claude, usa el almacenamiento del navegador
-  // (localStorage) como respaldo — en ese caso el álbum solo se guarda en ese dispositivo.
+  // ---- álbum de fotos: se guarda en Firestore (sin Firebase Storage, gratis) ----
+  // Cada foto se comprime y se guarda como texto base64 dentro de un documento de
+  // Firestore. Firestore limita cada documento a 1MB, así que la foto se reduce
+  // progresivamente (tamaño y calidad) hasta que quepa. Cualquier persona que abra
+  // la invitación, desde cualquier dispositivo, ve las mismas fotos en tiempo real.
   (function initAlbum(){
     const input = document.getElementById('photoInput');
     const grid = document.getElementById('albumGrid');
     const status = document.getElementById('albumStatus');
-    const hasShared = typeof window.storage !== 'undefined' && window.storage !== null;
-    const LOCAL_PREFIX = 'invitacion_album_';
+    const seen = new Set();
+    const MAX_BYTES = 700000; // margen seguro bajo el límite de 1MB de Firestore
 
-    function resizeImage(file, maxW){
+    function loadImage(file){
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
           const img = new Image();
-          img.onload = () => {
-            const scale = Math.min(1, maxW / img.width);
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.72));
-          };
+          img.onload = () => resolve(img);
           img.onerror = reject;
           img.src = e.target.result;
         };
@@ -1319,54 +1329,70 @@
       });
     }
 
-    function addToGrid(dataUrl){
+    function toDataUrl(img, maxW, quality){
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', quality);
+    }
+
+    // Reduce tamaño/calidad hasta que el base64 quepa en un documento de Firestore
+    async function compressUnderLimit(file){
+      const img = await loadImage(file);
+      const steps = [
+        [1000, 0.7], [800, 0.6], [640, 0.55],
+        [480, 0.5],  [360, 0.45], [280, 0.4]
+      ];
+      let last = null;
+      for(const [maxW, q] of steps){
+        const dataUrl = toDataUrl(img, maxW, q);
+        last = dataUrl;
+        if(dataUrl.length <= MAX_BYTES) return dataUrl;
+      }
+      return last; // mejor esfuerzo si sigue grande
+    }
+
+    function addToGrid(dataUrl, id){
+      if(id){
+        if(seen.has(id)) return;
+        seen.add(id);
+      }
       const item = document.createElement('div');
       item.className = 'album-item';
       const img = document.createElement('img');
       img.src = dataUrl;
       img.alt = 'Foto del álbum';
       item.appendChild(img);
-      grid.appendChild(item);
+      grid.prepend(item);
     }
 
-    async function savePhoto(dataUrl){
-      const key = 'album:photo:' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-      try{
-        if(hasShared){
-          await window.storage.set(key, dataUrl, true);
-        } else {
-          localStorage.setItem(LOCAL_PREFIX + key, dataUrl);
-        }
-        return true;
-      } catch(err){
-        console.error('No se pudo guardar la foto:', err);
-        return false;
-      }
+    async function uploadPhoto(dataUrl){
+      await db.collection('album').add({
+        photo: dataUrl,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
 
-    async function loadPhotos(){
-      try{
-        if(hasShared){
-          const listResult = await window.storage.list('album:photo:', true);
-          const keys = (listResult && listResult.keys) ? listResult.keys : [];
-          if(keys.length === 0){ status.textContent = 'Sé la primera persona en subir una foto ✦'; return; }
-          for(const k of keys){
-            try{
-              const res = await window.storage.get(k, true);
-              if(res && res.value) addToGrid(res.value);
-            } catch(e){ /* clave individual falló, seguimos con las demás */ }
-          }
-          status.textContent = keys.length + (keys.length === 1 ? ' foto compartida' : ' fotos compartidas');
-        } else {
-          const localKeys = Object.keys(localStorage).filter(k => k.startsWith(LOCAL_PREFIX));
-          if(localKeys.length === 0){ status.textContent = 'Sube la primera foto (se guarda en este dispositivo) ✦'; return; }
-          localKeys.forEach(k => addToGrid(localStorage.getItem(k)));
-          status.textContent = localKeys.length + ' foto(s) guardadas en este dispositivo';
-        }
-      } catch(err){
-        console.error('Error cargando el álbum:', err);
-        status.textContent = 'No se pudo cargar el álbum. Intenta recargar la página.';
-      }
+    function listenPhotos(){
+      db.collection('album').orderBy('createdAt', 'desc')
+        .onSnapshot((snap) => {
+          snap.docChanges().forEach((change) => {
+            if(change.type === 'added'){
+              const data = change.doc.data();
+              if(data && data.photo) addToGrid(data.photo, change.doc.id);
+            }
+          });
+          const count = snap.size;
+          status.textContent = count === 0
+            ? 'Sé la primera persona en subir una foto ✦'
+            : count + (count === 1 ? ' foto compartida' : ' fotos compartidas');
+        }, (err) => {
+          console.error('Error cargando el álbum:', err);
+          status.textContent = 'No se pudo cargar el álbum. Intenta recargar la página.';
+        });
     }
 
     input.addEventListener('change', async (e) => {
@@ -1374,10 +1400,13 @@
       if(!file) return;
       status.textContent = 'Subiendo foto…';
       try{
-        const dataUrl = await resizeImage(file, 900);
-        addToGrid(dataUrl);
-        const ok = await savePhoto(dataUrl);
-        status.textContent = ok ? '¡Foto agregada al álbum! ✦' : 'La foto se ve aquí, pero no se pudo guardar.';
+        const dataUrl = await compressUnderLimit(file);
+        if(dataUrl.length > MAX_BYTES){
+          status.textContent = 'La foto es muy pesada, intenta con otra o una captura más pequeña.';
+        } else {
+          await uploadPhoto(dataUrl);
+          status.textContent = '¡Foto agregada al álbum! ✦';
+        }
       } catch(err){
         console.error(err);
         status.textContent = 'Hubo un problema subiendo la foto.';
@@ -1385,62 +1414,53 @@
       input.value = '';
     });
 
-    loadPhotos();
+    listenPhotos();
   })();
 
-  // ---- sugerencias de canciones: se guardan aunque se recargue la página ----
+  // ---- sugerencias de canciones: se guardan en Firestore (Firebase) ----
+  // Igual que el álbum, cualquier persona ve en tiempo real las canciones
+  // que sugieren los demás invitados, sin importar el dispositivo.
   (function initSongs(){
     const form = document.getElementById('songForm');
     const input = document.getElementById('songInput');
     const list = document.getElementById('songList');
     const status = document.getElementById('songStatus');
-    const hasShared = typeof window.storage !== 'undefined' && window.storage !== null;
-    const LOCAL_PREFIX = 'invitacion_songs_';
+    const seen = new Set();
 
-    function addToList(text){
+    function addToList(text, id){
+      if(id){
+        if(seen.has(id)) return;
+        seen.add(id);
+      }
       const li = document.createElement('li');
       li.textContent = text;
-      list.appendChild(li);
+      list.prepend(li);
     }
 
     async function saveSong(text){
-      const key = 'song:suggestion:' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-      try{
-        if(hasShared){
-          await window.storage.set(key, text, true);
-        } else {
-          localStorage.setItem(LOCAL_PREFIX + key, text);
-        }
-        return true;
-      } catch(err){
-        console.error('No se pudo guardar la canción:', err);
-        return false;
-      }
+      await db.collection('songs').add({
+        text,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
     }
 
-    async function loadSongs(){
-      try{
-        if(hasShared){
-          const listResult = await window.storage.list('song:suggestion:', true);
-          const keys = (listResult && listResult.keys) ? listResult.keys : [];
-          if(keys.length === 0){ status.textContent = 'Sé la primera persona en sugerir una canción ✦'; return; }
-          for(const k of keys){
-            try{
-              const res = await window.storage.get(k, true);
-              if(res && res.value) addToList(res.value);
-            } catch(e){ /* seguimos con las demás */ }
-          }
-          status.textContent = keys.length + (keys.length === 1 ? ' canción sugerida' : ' canciones sugeridas');
-        } else {
-          const localKeys = Object.keys(localStorage).filter(k => k.startsWith(LOCAL_PREFIX));
-          if(localKeys.length === 0){ status.textContent = 'Sugiere la primera canción (se guarda en este dispositivo) ✦'; return; }
-          localKeys.forEach(k => addToList(localStorage.getItem(k)));
-          status.textContent = localKeys.length + ' canción(es) guardadas en este dispositivo';
-        }
-      } catch(err){
-        console.error('Error cargando canciones:', err);
-        status.textContent = 'No se pudieron cargar las sugerencias.';
-      }
+    function listenSongs(){
+      db.collection('songs').orderBy('createdAt', 'desc')
+        .onSnapshot((snap) => {
+          snap.docChanges().forEach((change) => {
+            if(change.type === 'added'){
+              const data = change.doc.data();
+              if(data && data.text) addToList(data.text, change.doc.id);
+            }
+          });
+          const count = snap.size;
+          status.textContent = count === 0
+            ? 'Sé la primera persona en sugerir una canción ✦'
+            : count + (count === 1 ? ' canción sugerida' : ' canciones sugeridas');
+        }, (err) => {
+          console.error('Error cargando canciones:', err);
+          status.textContent = 'No se pudieron cargar las sugerencias.';
+        });
     }
 
     form.addEventListener('submit', async (e) => {
@@ -1448,13 +1468,17 @@
       const text = input.value.trim();
       if(!text) return;
       status.textContent = 'Guardando…';
-      addToList(text);
-      const ok = await saveSong(text);
-      status.textContent = ok ? '¡Gracias por tu sugerencia! ✦' : 'Se muestra aquí, pero no se pudo guardar.';
+      try{
+        await saveSong(text);
+        status.textContent = '¡Gracias por tu sugerencia! ✦';
+      } catch(err){
+        console.error(err);
+        status.textContent = 'Hubo un problema guardando tu sugerencia.';
+      }
       input.value = '';
     });
 
-    loadSongs();
+    listenSongs();
   })();
 
   // ---- línea de tiempo: revelado escalonado + expansión suave de imagen ----
