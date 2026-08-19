@@ -528,6 +528,8 @@
     box-shadow:0 20px 50px rgba(28,58,92,0.12);
   }
   .venue-map{ width:100%; height:260px; border:0; display:block; filter:grayscale(0.15) contrast(1.02); }
+  .venue-photos{ display:grid; grid-template-columns:1fr 1fr; }
+  .venue-photos img{ width:100%; height:190px; object-fit:cover; display:block; }
   .venue-info{ padding:1.8rem 1.8rem 2.1rem; text-align:center; }
   .venue-info h3{ font-size:1.5rem; margin-bottom:0.3rem; }
   .venue-info p{ color:var(--ink-soft); font-size:1rem; margin-bottom:1.3rem; }
@@ -594,6 +596,16 @@
     animation:albumIn 0.5s ease forwards;
   }
   .album-item img{ width:100%; height:100%; object-fit:cover; }
+  .album-delete{
+    position:absolute; top:6px; right:6px; z-index:2;
+    width:26px; height:26px; border-radius:50%; border:none;
+    background:rgba(28,58,92,0.55); color:#fff;
+    font-family:'Jost',sans-serif; font-size:0.85rem; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; backdrop-filter:blur(2px);
+    transition:background 0.25s ease, transform 0.25s ease;
+  }
+  .album-delete:hover{ background:#c0392b; transform:scale(1.08); }
   @keyframes albumIn{ to{ opacity:1; transform:scale(1); } }
 
   /* ---------- SUGERENCIAS DE CANCIONES ---------- */
@@ -871,12 +883,12 @@
   <!-- INVITACIÓN FORMAL + CONTADOR -->
   <section class="invite-text-section">
     <div class="rule"></div>
-    <p class="invite-formal"> <h1>
-     Patricia Buesaquillo y Emilio Almeida</h1><br>
+    <p class="invite-formal">
+      Patricia Buesaquillo y Emilio Almeida<br>
       tienen el honor de invitarte a ti y a tu familia<br>
       al grado de su hija<br>
-       <h1 class="signature">Natalia Elizabeth Almeida Buesquillo</h1>
-       <h1>abogada </h1>
+      <span class="invite-name">Natalia Elizabeth Almeida Buesaquillo</span><br>
+      abogada
     </p>
 
     <div class="rule"></div>
@@ -1010,8 +1022,10 @@
     <p class="venue-note">Código de vestimenta: cualquier color, excepto vino tinto. Tu presencia es el mejor regalo.</p>
 
     <div class="venue-card">
-      <iframe class="venue-map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
-        src="https://www.google.com/maps?q=place_id:ChIJEVp8m4jTLo4R75UWV70ablY&output=embed"></iframe>
+      <div class="venue-photos">
+        <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon1.jpg" alt="Salón de Eventos Xilón">
+        <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon2.jpg" alt="Salón de Eventos Xilón decorado">
+      </div>
       <div class="venue-info">
         <h3>Salón de Eventos Xilón</h3>
         <p>Calle 18 #45-2, Pasto, Nariño</p>
@@ -1362,10 +1376,32 @@
       }
       const item = document.createElement('div');
       item.className = 'album-item';
+      if(id) item.dataset.id = id;
+
       const img = document.createElement('img');
       img.src = dataUrl;
       img.alt = 'Foto del álbum';
       item.appendChild(img);
+
+      if(id){
+        const delBtn = document.createElement('button');
+        delBtn.className = 'album-delete';
+        delBtn.type = 'button';
+        delBtn.innerHTML = '&#10005;';
+        delBtn.title = 'Eliminar esta foto';
+        delBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if(!confirm('¿Eliminar esta foto para todos los que vean la invitación?')) return;
+          try{
+            await db.collection('album').doc(id).delete();
+          } catch(err){
+            console.error('No se pudo eliminar la foto:', err);
+            alert('No se pudo eliminar la foto. Intenta de nuevo.');
+          }
+        });
+        item.appendChild(delBtn);
+      }
+
       grid.prepend(item);
     }
 
@@ -1383,6 +1419,11 @@
             if(change.type === 'added'){
               const data = change.doc.data();
               if(data && data.photo) addToGrid(data.photo, change.doc.id);
+            }
+            if(change.type === 'removed'){
+              seen.delete(change.doc.id);
+              const el = grid.querySelector('[data-id="' + change.doc.id + '"]');
+              if(el) el.remove();
             }
           });
           const count = snap.size;
