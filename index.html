@@ -528,8 +528,31 @@
     box-shadow:0 20px 50px rgba(28,58,92,0.12);
   }
   .venue-map{ width:100%; height:260px; border:0; display:block; filter:grayscale(0.15) contrast(1.02); }
-  .venue-photos{ display:grid; grid-template-columns:1fr 1fr; }
-  .venue-photos img{ width:100%; height:190px; object-fit:cover; display:block; }
+  .venue-photos{ position:relative; overflow:hidden; height:220px; background:#eaf4fb; }
+  .venue-track{ display:flex; height:100%; transition:transform 0.45s ease; }
+  .venue-track img{ flex:0 0 100%; width:100%; height:100%; object-fit:cover; display:block; }
+  .venue-nav{
+    position:absolute; top:50%; transform:translateY(-50%); z-index:3;
+    width:34px; height:34px; border-radius:50%; border:none;
+    background:rgba(255,255,255,0.88); color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; box-shadow:0 6px 16px rgba(28,58,92,0.25);
+    transition:background 0.25s ease, transform 0.25s ease;
+  }
+  .venue-nav:hover{ background:#fff; transform:translateY(-50%) scale(1.08); }
+  .venue-nav.prev{ left:10px; }
+  .venue-nav.next{ right:10px; }
+  .venue-nav svg{ width:16px; height:16px; }
+  .venue-dots{
+    position:absolute; bottom:9px; left:0; right:0; z-index:3;
+    display:flex; justify-content:center; gap:6px;
+  }
+  .venue-dot{
+    width:6px; height:6px; border-radius:50%;
+    background:rgba(255,255,255,0.55); border:none; padding:0; cursor:pointer;
+    transition:background 0.25s ease, transform 0.25s ease;
+  }
+  .venue-dot.active{ background:#fff; transform:scale(1.3); }
   .venue-info{ padding:1.8rem 1.8rem 2.1rem; text-align:center; }
   .venue-info h3{ font-size:1.5rem; margin-bottom:0.3rem; }
   .venue-info p{ color:var(--ink-soft); font-size:1rem; margin-bottom:1.3rem; }
@@ -1022,9 +1045,21 @@
     <p class="venue-note">Código de vestimenta: cualquier color, excepto vino tinto. Tu presencia es el mejor regalo.</p>
 
     <div class="venue-card">
-      <div class="venue-photos">
-        <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon1.jpg" alt="Salón de Eventos Xilón">
-        <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon2.jpg" alt="Salón de Eventos Xilón decorado">
+      <div class="venue-photos" id="venuePhotos">
+        <div class="venue-track" id="venueTrack">
+          <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon1.jpg" alt="Salón de Eventos Xilón">
+          <img src="https://raw.githubusercontent.com/yimmyff/invitacion/main/salon2.jpg" alt="Salón de Eventos Xilón decorado">
+        </div>
+        <button class="venue-nav prev" id="venuePrev" type="button" aria-label="Foto anterior">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="venue-nav next" id="venueNext" type="button" aria-label="Foto siguiente">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="venue-dots" id="venueDots">
+          <button class="venue-dot active" type="button" aria-label="Foto 1"></button>
+          <button class="venue-dot" type="button" aria-label="Foto 2"></button>
+        </div>
       </div>
       <div class="venue-info">
         <h3>Salón de Eventos Xilón</h3>
@@ -1293,6 +1328,29 @@
     scrollTrigger:{ trigger:".column-row", start:"top 95%", end:"top 70%", scrub:0.6 } });
 
   // ---- contador de tiempo hasta el evento ----
+  // ---- carrusel de fotos del salón ----
+  (function initVenueCarousel(){
+    const track = document.getElementById('venueTrack');
+    const prevBtn = document.getElementById('venuePrev');
+    const nextBtn = document.getElementById('venueNext');
+    const dots = document.querySelectorAll('#venueDots .venue-dot');
+    if(!track) return;
+
+    const total = track.children.length;
+    let index = 0;
+
+    function render(){
+      track.style.transform = 'translateX(-' + (index * 100) + '%)';
+      dots.forEach((d, i) => d.classList.toggle('active', i === index));
+    }
+
+    prevBtn.addEventListener('click', () => { index = (index - 1 + total) % total; render(); });
+    nextBtn.addEventListener('click', () => { index = (index + 1) % total; render(); });
+    dots.forEach((d, i) => d.addEventListener('click', () => { index = i; render(); }));
+
+    render();
+  })();
+
   (function initCountdown(){
     const target = new Date("2026-09-05T18:00:00-05:00").getTime();
     const elD = document.getElementById('cdDays');
